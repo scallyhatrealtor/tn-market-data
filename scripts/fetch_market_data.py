@@ -26,9 +26,8 @@ REDFIN_CITY_TRACKER_URL = (
 )
 
 # The exact "city, state" strings as they appear in Redfin's data.
-
+#
 # Redfin's CITY field is typically just the city name; STATE_CODE is the
-
 # 2-letter code. We match on (city name, state code) pairs.
 
 SERVICE_AREAS = [
@@ -39,12 +38,11 @@ SERVICE_AREAS = [
     "Greenback", "Mascot", "Rutledge", "Blaine", "Norris", "Rockford",
     "Walland", "Townsend", "Tellico Village",
 ]
+
 STATE_CODE = "TN"
 
 # Property type filter — Redfin's file has a row per (city, property_type,
-
 # month). "All Residential" is the aggregate across single family, condo,
-
 # and townhouse, which is the closest match to a general "market dashboard".
 
 PROPERTY_TYPE = "All Residential"
@@ -54,11 +52,9 @@ PROPERTY_TYPE = "All Residential"
 TREND_MONTHS = 10
 
 # Columns we actually need, keyed by the canonical Redfin field name.
-
+#
 # NOTE: Redfin has occasionally renamed columns across schema versions.
-
 # If a run fails with a "missing column" error, check the printed header
-
 # list in the Action log and update this mapping.
 
 COLUMN_MAP = {
@@ -69,27 +65,39 @@ COLUMN_MAP = {
     "property_type": '"PROPERTY_TYPE"',
     "median_sale_price": '"MEDIAN_SALE_PRICE"',
     "median_sale_price_yoy": '"MEDIAN_SALE_PRICE_YOY"',
+    "median_list_price": '"MEDIAN_LIST_PRICE"',
     "median_ppsf": '"MEDIAN_PPSF"',
     "median_ppsf_yoy": '"MEDIAN_PPSF_YOY"',
     "median_dom": '"MEDIAN_DOM"',
     "median_dom_yoy": '"MEDIAN_DOM_YOY"',
     "homes_sold": '"HOMES_SOLD"',
     "homes_sold_yoy": '"HOMES_SOLD_YOY"',
+    "pending_sales": '"PENDING_SALES"',
+    "pending_sales_mom": '"PENDING_SALES_MOM"',
+    "pending_sales_yoy": '"PENDING_SALES_YOY"',
     "new_listings": '"NEW_LISTINGS"',
     "new_listings_yoy": '"NEW_LISTINGS_YOY"',
     "inventory": '"INVENTORY"',
     "inventory_yoy": '"INVENTORY_YOY"',
+    "months_of_supply": '"MONTHS_OF_SUPPLY"',
+    "avg_sale_to_list": '"AVG_SALE_TO_LIST"',
+    "sold_above_list": '"SOLD_ABOVE_LIST"',
     "price_drops": '"PRICE_DROPS"',
     "price_drops_yoy": '"PRICE_DROPS_YOY"',
-    # pending_sales is NOT reliably present in the monthly city tracker file.
-    # We leave it out of REQUIRED fields and only include it in the output
-    # if the column exists — see build_row() below.
 }
 
 REQUIRED_FIELDS = [
-    "period_end", "region_type", "city", "state_code", "property_type",
-    "median_sale_price", "median_dom", "homes_sold", "new_listings",
-    "inventory", "median_ppsf",
+    "period_end",
+    "region_type",
+    "city",
+    "state_code",
+    "property_type",
+    "median_sale_price",
+    "median_dom",
+    "homes_sold",
+    "new_listings",
+    "inventory",
+    "median_ppsf",
 ]
 
 
@@ -129,18 +137,36 @@ def build_row(header, fields, col_index):
         "city": get("city"),
         "state_code": get("state_code"),
         "property_type": get("property_type"),
+
         "median_sale_price": to_float(get("median_sale_price")),
         "median_sale_price_yoy": to_float(get("median_sale_price_yoy")),
+
+        "median_list_price": to_float(get("median_list_price")),
+
         "median_ppsf": to_float(get("median_ppsf")),
         "median_ppsf_yoy": to_float(get("median_ppsf_yoy")),
+
         "median_dom": to_float(get("median_dom")),
         "median_dom_yoy": to_float(get("median_dom_yoy")),
+
         "homes_sold": to_float(get("homes_sold")),
         "homes_sold_yoy": to_float(get("homes_sold_yoy")),
+
+        "pending_sales": to_float(get("pending_sales")),
+        "pending_sales_mom": to_float(get("pending_sales_mom")),
+        "pending_sales_yoy": to_float(get("pending_sales_yoy")),
+
         "new_listings": to_float(get("new_listings")),
         "new_listings_yoy": to_float(get("new_listings_yoy")),
+
         "inventory": to_float(get("inventory")),
         "inventory_yoy": to_float(get("inventory_yoy")),
+
+        "months_of_supply": to_float(get("months_of_supply")),
+
+        "avg_sale_to_list": to_float(get("avg_sale_to_list")),
+        "sold_above_list": to_float(get("sold_above_list")),
+
         "price_drops": to_float(get("price_drops")),
         "price_drops_yoy": to_float(get("price_drops_yoy")),
     }
@@ -152,6 +178,7 @@ def main():
     fh = download_and_open()
     header_line = fh.readline().rstrip("\n")
     header = header_line.split("\t")
+
     col_index = {
         canonical: i
         for i, name in enumerate(header)
@@ -160,6 +187,7 @@ def main():
     }
 
     missing = [c for c in REQUIRED_FIELDS if c not in col_index]
+
     if missing:
         log(f"WARNING: expected columns not found in Redfin file: {missing}")
         log(f"Actual header columns: {header}")
@@ -178,6 +206,7 @@ def main():
         city_idx = col_index.get("city")
         state_idx = col_index.get("state_code")
         ptype_idx = col_index.get("property_type")
+
         if city_idx is None or state_idx is None or ptype_idx is None:
             break  # can't proceed without these
 
@@ -190,8 +219,10 @@ def main():
 
         if state_val != STATE_CODE:
             continue
+
         if ptype_val != PROPERTY_TYPE:
             continue
+
         if city_val.lower() not in service_area_lookup:
             continue
 
@@ -200,15 +231,25 @@ def main():
         by_city.setdefault(city_val, []).append(row)
 
     fh.close()
-    log(f"Scanned {rows_scanned} rows, matched {rows_matched} rows "
-        f"across {len(by_city)} of {len(SERVICE_AREAS)} requested cities.")
+
+    log(
+        f"Scanned {rows_scanned} rows, matched {rows_matched} rows "
+        f"across {len(by_city)} of {len(SERVICE_AREAS)} requested cities."
+    )
 
     found_cities = {c.lower() for c in by_city.keys()}
-    not_found = [c for c in SERVICE_AREAS if c.lower() not in found_cities]
+
+    not_found = [
+        c for c in SERVICE_AREAS
+        if c.lower() not in found_cities
+    ]
+
     if not_found:
-        log(f"NOTE: no rows found for these service areas (Redfin may not "
-            f"track them at city level — consider a county-level fallback "
-            f"for these): {not_found}")
+        log(
+            f"NOTE: no rows found for these service areas "
+            f"(Redfin may not track them at city level — consider "
+            f"a county-level fallback for these): {not_found}"
+        )
 
     output = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -220,6 +261,7 @@ def main():
 
     for city_val, rows in by_city.items():
         rows.sort(key=lambda r: r["period_end"] or "")
+
         latest = rows[-1]
         trend = rows[-TREND_MONTHS:]
 
