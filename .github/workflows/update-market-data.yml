@@ -1,0 +1,36 @@
+name: Update TN market data
+
+on:
+  schedule:
+    # Runs at 13:00 UTC (9:00 AM Eastern) on the 22nd of every month.
+    # Redfin typically releases its monthly file during the third full
+    # week of the month, so the 22nd gives it time to land.
+    - cron: "0 13 22 * *"
+  workflow_dispatch: {}  # lets you trigger a run manually from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch and filter Redfin market data
+        run: python scripts/fetch_market_data.py
+
+      - name: Commit updated data file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/market-stats.json
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Update market data ($(date -u +'%Y-%m-%d'))"
+          git push
