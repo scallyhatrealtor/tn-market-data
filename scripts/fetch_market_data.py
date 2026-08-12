@@ -92,8 +92,10 @@ REQUIRED_FIELDS = [
     "inventory", "median_ppsf",
 ]
 
+
 def log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
+
 
 def download_and_open() -> io.TextIOWrapper:
     log(f"Downloading {REDFIN_CITY_TRACKER_URL} ...")
@@ -105,6 +107,7 @@ def download_and_open() -> io.TextIOWrapper:
     gz = gzip.GzipFile(fileobj=io.BytesIO(resp.read()))
     return io.TextIOWrapper(gz, encoding="utf-8", errors="replace")
 
+
 def to_float(val):
     if val is None or val == "":
         return None
@@ -113,12 +116,13 @@ def to_float(val):
     except ValueError:
         return None
 
+
 def build_row(header, fields, col_index):
     def get(name):
         idx = col_index.get(name)
         if idx is None or idx >= len(fields):
             return None
-        return fields[idx]
+        return fields[idx].strip().strip('"')
 
     return {
         "period_end": get("period_end"),
@@ -140,6 +144,7 @@ def build_row(header, fields, col_index):
         "price_drops": to_float(get("price_drops")),
         "price_drops_yoy": to_float(get("price_drops_yoy")),
     }
+
 
 def main():
     service_area_lookup = {name.lower() for name in SERVICE_AREAS}
@@ -179,9 +184,9 @@ def main():
         if len(fields) <= max(city_idx, state_idx, ptype_idx):
             continue
 
-        city_val = fields[city_idx].strip()
-        state_val = fields[state_idx].strip()
-        ptype_val = fields[ptype_idx].strip()
+        city_val = fields[city_idx].strip().strip('"')
+        state_val = fields[state_idx].strip().strip('"')
+        ptype_val = fields[ptype_idx].strip().strip('"')
 
         if state_val != STATE_CODE:
             continue
@@ -234,6 +239,7 @@ def main():
         json.dump(output, f, indent=2)
 
     log("Wrote data/market-stats.json")
+
 
 if __name__ == "__main__":
     main()
