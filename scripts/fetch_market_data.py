@@ -26,8 +26,11 @@ REDFIN_CITY_TRACKER_URL = (
 )
 
 # The exact "city, state" strings as they appear in Redfin's data.
+
 # Redfin's CITY field is typically just the city name; STATE_CODE is the
+
 # 2-letter code. We match on (city name, state code) pairs.
+
 SERVICE_AREAS = [
     "Knoxville", "Farragut", "Maryville", "Alcoa", "Oak Ridge",
     "Lenoir City", "Loudon", "Seymour", "Sevierville", "Gatlinburg",
@@ -39,37 +42,45 @@ SERVICE_AREAS = [
 STATE_CODE = "TN"
 
 # Property type filter — Redfin's file has a row per (city, property_type,
+
 # month). "All Residential" is the aggregate across single family, condo,
+
 # and townhouse, which is the closest match to a general "market dashboard".
+
 PROPERTY_TYPE = "All Residential"
 
 # How many trailing months to keep for the trend charts.
+
 TREND_MONTHS = 10
 
 # Columns we actually need, keyed by the canonical Redfin field name.
+
 # NOTE: Redfin has occasionally renamed columns across schema versions.
+
 # If a run fails with a "missing column" error, check the printed header
+
 # list in the Action log and update this mapping.
+
 COLUMN_MAP = {
-    "period_end": "period_end",
-    "region_type": "region_type",
-    "city": "city",
-    "state_code": "state_code",
-    "property_type": "property_type",
-    "median_sale_price": "median_sale_price",
-    "median_sale_price_yoy": "median_sale_price_yoy",
-    "median_ppsf": "median_ppsf",
-    "median_ppsf_yoy": "median_ppsf_yoy",
-    "median_dom": "median_dom",
-    "median_dom_yoy": "median_dom_yoy",
-    "homes_sold": "homes_sold",
-    "homes_sold_yoy": "homes_sold_yoy",
-    "new_listings": "new_listings",
-    "new_listings_yoy": "new_listings_yoy",
-    "inventory": "inventory",
-    "inventory_yoy": "inventory_yoy",
-    "price_drops": "price_drops",
-    "price_drops_yoy": "price_drops_yoy",
+    "period_end": '"PERIOD_END"',
+    "region_type": '"REGION_TYPE"',
+    "city": '"CITY"',
+    "state_code": '"STATE_CODE"',
+    "property_type": '"PROPERTY_TYPE"',
+    "median_sale_price": '"MEDIAN_SALE_PRICE"',
+    "median_sale_price_yoy": '"MEDIAN_SALE_PRICE_YOY"',
+    "median_ppsf": '"MEDIAN_PPSF"',
+    "median_ppsf_yoy": '"MEDIAN_PPSF_YOY"',
+    "median_dom": '"MEDIAN_DOM"',
+    "median_dom_yoy": '"MEDIAN_DOM_YOY"',
+    "homes_sold": '"HOMES_SOLD"',
+    "homes_sold_yoy": '"HOMES_SOLD_YOY"',
+    "new_listings": '"NEW_LISTINGS"',
+    "new_listings_yoy": '"NEW_LISTINGS_YOY"',
+    "inventory": '"INVENTORY"',
+    "inventory_yoy": '"INVENTORY_YOY"',
+    "price_drops": '"PRICE_DROPS"',
+    "price_drops_yoy": '"PRICE_DROPS_YOY"',
     # pending_sales is NOT reliably present in the monthly city tracker file.
     # We leave it out of REQUIRED fields and only include it in the output
     # if the column exists — see build_row() below.
@@ -81,10 +92,8 @@ REQUIRED_FIELDS = [
     "inventory", "median_ppsf",
 ]
 
-
 def log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
-
 
 def download_and_open() -> io.TextIOWrapper:
     log(f"Downloading {REDFIN_CITY_TRACKER_URL} ...")
@@ -96,7 +105,6 @@ def download_and_open() -> io.TextIOWrapper:
     gz = gzip.GzipFile(fileobj=io.BytesIO(resp.read()))
     return io.TextIOWrapper(gz, encoding="utf-8", errors="replace")
 
-
 def to_float(val):
     if val is None or val == "":
         return None
@@ -104,7 +112,6 @@ def to_float(val):
         return float(val)
     except ValueError:
         return None
-
 
 def build_row(header, fields, col_index):
     def get(name):
@@ -134,14 +141,18 @@ def build_row(header, fields, col_index):
         "price_drops_yoy": to_float(get("price_drops_yoy")),
     }
 
-
 def main():
     service_area_lookup = {name.lower() for name in SERVICE_AREAS}
 
     fh = download_and_open()
     header_line = fh.readline().rstrip("\n")
     header = header_line.split("\t")
-    col_index = {name: i for i, name in enumerate(header)}
+    col_index = {
+        canonical: i
+        for i, name in enumerate(header)
+        for canonical, redfin_name in COLUMN_MAP.items()
+        if name == redfin_name
+    }
 
     missing = [c for c in REQUIRED_FIELDS if c not in col_index]
     if missing:
@@ -223,7 +234,6 @@ def main():
         json.dump(output, f, indent=2)
 
     log("Wrote data/market-stats.json")
-
 
 if __name__ == "__main__":
     main()
